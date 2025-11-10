@@ -31,12 +31,12 @@
   left: 50%;
   transform: translate(-50%);
   border-radius: 50px;
-  background: #161616;
+  background: #0d0d0d;
   transform-origin: center;
 }
 
 .creative-script-ghost-cursor__eyes {
-  box-shadow: 40px 0 0 #161616;
+  box-shadow: 40px 0 0 #0d0d0d;
 }
 
 .creative-script-ghost-cursor__mouth {
