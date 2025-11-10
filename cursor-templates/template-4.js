@@ -1,6 +1,5 @@
 (function () {
   const TEMPLATE_ID = 'template-4';
-  const SCRIPT_ID = 'creative-script-tubes-cursor-loader';
   const SCRIPT_SRC = 'https://cdn.jsdelivr.net/npm/threejs-components@0.0.19/build/cursors/tubes1.min.js';
   const LAYER_CLASS = 'creative-script-tubes-cursor-layer';
   const CANVAS_CLASS = 'creative-script-tubes-canvas';
@@ -17,42 +16,24 @@
     }
   }
 
-  function loadScriptOnce() {
-    if (typeof window === 'undefined') {
+  function loadModuleOnce(winRef) {
+    if (typeof winRef === 'undefined') {
       return Promise.reject(new Error('Window is not defined'));
     }
 
-    window.__creativeScriptLoadedScripts = window.__creativeScriptLoadedScripts || {};
+    winRef.__creativeScriptLoadedModules = winRef.__creativeScriptLoadedModules || {};
 
-    if (window.__creativeScriptLoadedScripts[SCRIPT_SRC]) {
-      return window.__creativeScriptLoadedScripts[SCRIPT_SRC];
+    if (winRef.__creativeScriptLoadedModules[SCRIPT_SRC]) {
+      return winRef.__creativeScriptLoadedModules[SCRIPT_SRC];
     }
 
-    const existing = document.getElementById(SCRIPT_ID);
-    if (existing && existing.getAttribute('data-loaded') === 'true') {
-      window.__creativeScriptLoadedScripts[SCRIPT_SRC] = Promise.resolve();
-      return window.__creativeScriptLoadedScripts[SCRIPT_SRC];
-    }
+    const promise = import(/* webpackIgnore: true */ SCRIPT_SRC)
+      .then((module) => module && (module.default || module))
+      .catch((error) => {
+        throw new Error(`Failed to load Tubes cursor module: ${error && error.message ? error.message : error}`);
+      });
 
-    const promise = new Promise((resolve, reject) => {
-      const script = existing || document.createElement('script');
-      script.id = SCRIPT_ID;
-      script.src = SCRIPT_SRC;
-      script.async = true;
-      script.onload = () => {
-        script.setAttribute('data-loaded', 'true');
-        resolve();
-      };
-      script.onerror = (err) => {
-        reject(new Error('Failed to load Tubes cursor script')); // eslint-disable-line prefer-promise-reject-errors
-      };
-
-      if (!existing) {
-        document.head.appendChild(script);
-      }
-    });
-
-    window.__creativeScriptLoadedScripts[SCRIPT_SRC] = promise;
+    winRef.__creativeScriptLoadedModules[SCRIPT_SRC] = promise;
     return promise;
   }
 
@@ -99,15 +80,15 @@
       win.addEventListener('resize', resize);
       cleanupFns.push(() => win.removeEventListener('resize', resize));
 
-      loadScriptOnce()
-        .then(() => {
+      loadModuleOnce(win)
+        .then((TubesCursorModule) => {
           if (cancelled) {
             return;
           }
 
-          const TubesCursor = win.TubesCursor;
+          const TubesCursor = TubesCursorModule;
           if (typeof TubesCursor !== 'function') {
-            throw new Error('TubesCursor is not available on window');
+            throw new Error('TubesCursor module did not return a function');
           }
 
           tubesApp = TubesCursor(canvas, {
