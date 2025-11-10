@@ -429,32 +429,40 @@
 
   function createPointerController(win, splat) {
     const pointer = createPointer();
-    let isPointerInside = false;
-    const passiveOptions = { passive: true };
+    let isInteractionActive = false;
     let lastSplatTime = 0;
 
-    const moveHandler = (event) => {
-      const now = performance.now();
-      if (now - lastSplatTime < SPLAT_COOLDOWN_MS) {
-        return;
+    const passiveMoveOptions = { passive: true };
+    const touchMoveOptions = { passive: false };
+
+    const getNow = () => (typeof win.performance !== 'undefined' && typeof win.performance.now === 'function'
+      ? win.performance.now()
+      : Date.now());
+
+    const clampToViewport = (x, y) => {
+      const within = x >= 0 && y >= 0 && x <= win.innerWidth && y <= win.innerHeight;
+      return within;
+    };
+
+    const updatePointer = (x, y, timestamp) => {
+      const now = timestamp ?? getNow();
+
+      if (!clampToViewport(x, y)) {
+        isInteractionActive = false;
+        return false;
       }
 
-      const x = event.clientX;
-      const y = event.clientY;
-      const insideViewport = x >= 0 && y >= 0 && x <= win.innerWidth && y <= win.innerHeight;
-
-      if (!insideViewport) {
-        isPointerInside = false;
-        return;
-      }
-
-      if (!isPointerInside) {
+      if (!isInteractionActive) {
         pointer.x = x;
         pointer.y = y;
         pointer.dx = 0;
         pointer.dy = 0;
-        isPointerInside = true;
-        return;
+        isInteractionActive = true;
+        return false;
+      }
+
+      if (now - lastSplatTime < SPLAT_COOLDOWN_MS) {
+        return false;
       }
 
       const deltaX = x - pointer.x;
@@ -462,7 +470,7 @@
       const distanceSq = deltaX * deltaX + deltaY * deltaY;
 
       if (distanceSq < MIN_POINTER_DISTANCE_SQ) {
-        return;
+        return false;
       }
 
       pointer.dx = deltaX * MOTION_MULTIPLIER;
@@ -472,19 +480,83 @@
 
       lastSplatTime = now;
       splat(pointer.x, pointer.y, pointer.dx, pointer.dy);
+      return true;
     };
 
-    const leaveHandler = () => {
-      isPointerInside = false;
+    const pointerDownHandler = (event) => {
+      const x = event.clientX;
+      const y = event.clientY;
+      if (!clampToViewport(x, y)) {
+        return;
+      }
+      pointer.x = x;
+      pointer.y = y;
+      pointer.dx = 0;
+      pointer.dy = 0;
+      isInteractionActive = true;
     };
 
-    win.addEventListener('pointermove', moveHandler, passiveOptions);
-    win.addEventListener('pointerleave', leaveHandler, passiveOptions);
+    const pointerMoveHandler = (event) => {
+      updatePointer(event.clientX, event.clientY, event.timeStamp ? event.timeStamp : undefined);
+    };
+
+    const pointerUpHandler = () => {
+      isInteractionActive = false;
+    };
+
+    const touchStartHandler = (event) => {
+      if (event.touches.length === 0) {
+        return;
+      }
+      const touch = event.touches[0];
+      const x = touch.clientX;
+      const y = touch.clientY;
+      if (!clampToViewport(x, y)) {
+        return;
+      }
+      pointer.x = x;
+      pointer.y = y;
+      pointer.dx = 0;
+      pointer.dy = 0;
+      isInteractionActive = true;
+    };
+
+    const touchMoveHandler = (event) => {
+      if (event.touches.length === 0) {
+        return;
+      }
+      const touch = event.touches[0];
+      const handled = updatePointer(touch.clientX, touch.clientY, event.timeStamp ? event.timeStamp : undefined);
+      if (handled) {
+        event.preventDefault();
+      }
+    };
+
+    const touchEndHandler = () => {
+      isInteractionActive = false;
+    };
+
+    win.addEventListener('pointerdown', pointerDownHandler, passiveMoveOptions);
+    win.addEventListener('pointermove', pointerMoveHandler, passiveMoveOptions);
+    win.addEventListener('pointerup', pointerUpHandler, passiveMoveOptions);
+    win.addEventListener('pointercancel', pointerUpHandler, passiveMoveOptions);
+
+    win.addEventListener('touchstart', touchStartHandler, touchMoveOptions);
+    win.addEventListener('touchmove', touchMoveHandler, touchMoveOptions);
+    win.addEventListener('touchend', touchEndHandler, passiveMoveOptions);
+    win.addEventListener('touchcancel', touchEndHandler, passiveMoveOptions);
 
     return {
       cleanup() {
-        win.removeEventListener('pointermove', moveHandler, passiveOptions);
-        win.removeEventListener('pointerleave', leaveHandler, passiveOptions);
+        win.removeEventListener('pointerdown', pointerDownHandler, passiveMoveOptions);
+        win.removeEventListener('pointermove', pointerMoveHandler, passiveMoveOptions);
+        win.removeEventListener('pointerup', pointerUpHandler, passiveMoveOptions);
+        win.removeEventListener('pointercancel', pointerUpHandler, passiveMoveOptions);
+
+        win.removeEventListener('touchstart', touchStartHandler, touchMoveOptions);
+        win.removeEventListener('touchmove', touchMoveHandler, touchMoveOptions);
+        win.removeEventListener('touchend', touchEndHandler, passiveMoveOptions);
+        win.removeEventListener('touchcancel', touchEndHandler, passiveMoveOptions);
       }
     };
   }
