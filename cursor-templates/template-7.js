@@ -138,16 +138,6 @@
 
       doc.body.appendChild(layer);
 
-      const originalBodyCursor = doc.body ? doc.body.style.cursor || '' : '';
-      if (doc.body) {
-        doc.body.style.cursor = 'none';
-      }
-      cleanupFns.push(() => {
-        if (doc.body) {
-          doc.body.style.cursor = originalBodyCursor;
-        }
-      });
-
       const pointerOptions = { passive: true };
       const pointerActiveOptions = { passive: false };
 
@@ -181,6 +171,7 @@
           Math.max(mapRange(Math.abs(velX * 1.5), 0, 100, 0, 10), mapRange(Math.abs(velY * 1.2), 0, 100, 0, 5)),
           2
         );
+        scaleMouth = Math.max(scaleMouth, 0.2);
 
         if (clicked) {
           ghost.eyes.style.transform = 'translateX(-50%) scale(' + scaleEyeX + ',' + 0.4 + ')';
