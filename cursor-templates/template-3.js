@@ -352,7 +352,7 @@
       gl.uniform1f(programs.splat.uniforms.aspectRatio, canvas.width / canvas.height);
       gl.uniform2f(programs.splat.uniforms.point, x / canvas.width, 1 - y / canvas.height);
       gl.uniform3f(programs.splat.uniforms.color, dx, -dy, 1);
-      gl.uniform1f(programs.splat.uniforms.radius, config.SPLAT_RADIUS);
+      gl.uniform1f(programs.splat.uniforms.radius, config.SPLAT_RADIUS / 100);
       blit(gl, programs.triangleBuffer, state.velocity.write.fbo);
       state.velocity.swap();
 
