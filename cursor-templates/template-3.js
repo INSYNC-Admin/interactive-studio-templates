@@ -4,8 +4,8 @@
   const CONFIG = {
     SIM_RESOLUTION: 256,
     DYE_RESOLUTION: 256,
-    DENSITY_DISSIPATION: 0.96,
-    VELOCITY_DISSIPATION: 0.98,
+    DENSITY_DISSIPATION: 0.99,
+    VELOCITY_DISSIPATION: 0.99,
     PRESSURE_DISSIPATION: 0.5,
     PRESSURE_ITERATIONS: 20,
     CURL: 6,
@@ -558,9 +558,9 @@
     }
 
     return {
-      r: r * 0.25,
-      g: g * 0.25,
-      b: b * 0.25
+      r: r * 0.4,
+      g: g * 0.4,
+      b: b * 0.4
     };
   }
 
