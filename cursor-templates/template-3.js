@@ -19,6 +19,10 @@
     BLOOM_SOFT_KNEE: 0.7
   };
 
+  const MOTION_MULTIPLIER = 1.75;
+  const MIN_POINTER_DISTANCE = 30;
+  const MIN_POINTER_DISTANCE_SQ = MIN_POINTER_DISTANCE * MIN_POINTER_DISTANCE;
+
   function register(templateId, factory) {
     if (typeof window === 'undefined') {
       return;
@@ -445,14 +449,18 @@
         return;
       }
 
-      pointer.dx = (x - pointer.x) * 5;
-      pointer.dy = (y - pointer.y) * 5;
-      pointer.x = x;
-      pointer.y = y;
+      const deltaX = x - pointer.x;
+      const deltaY = y - pointer.y;
+      const distanceSq = deltaX * deltaX + deltaY * deltaY;
 
-      if (Math.abs(pointer.dx) < 0.5 && Math.abs(pointer.dy) < 0.5) {
+      if (distanceSq < MIN_POINTER_DISTANCE_SQ) {
         return;
       }
+
+      pointer.dx = deltaX * MOTION_MULTIPLIER;
+      pointer.dy = deltaY * MOTION_MULTIPLIER;
+      pointer.x = x;
+      pointer.y = y;
 
       splat(pointer.x, pointer.y, pointer.dx, pointer.dy);
     };
@@ -539,7 +547,12 @@
       default:
         r = g = b = 1;
     }
-    return { r, g, b };
+
+    return {
+      r: r * 0.15,
+      g: g * 0.15,
+      b: b * 0.15
+    };
   }
 
   function compilePrograms(gl, ext) {
