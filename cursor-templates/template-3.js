@@ -14,16 +14,16 @@
     COLORFUL: true,
     TRANSPARENT: true,
     BLOOM: true,
-    BLOOM_INTENSITY: 0.8,
-    BLOOM_THRESHOLD: 0.6,
+    BLOOM_INTENSITY: 0.9,
+    BLOOM_THRESHOLD: 0.7,
     BLOOM_SOFT_KNEE: 0.7
   };
 
-  const MOTION_MULTIPLIER = 2.5;
-  const MIN_POINTER_DISTANCE = 15;
+  const MOTION_MULTIPLIER = 3.5;
+  const MIN_POINTER_DISTANCE = 10;
   const MIN_POINTER_DISTANCE_SQ = MIN_POINTER_DISTANCE * MIN_POINTER_DISTANCE;
-  const EMITTER_RADIUS_SCALE = 1.25;
-  const SPLAT_COOLDOWN_MS = 40;
+  const EMITTER_RADIUS_SCALE = 1.7;
+  const SPLAT_COOLDOWN_MS = 20;
 
   function register(templateId, factory) {
     if (typeof window === 'undefined') {
