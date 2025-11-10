@@ -19,10 +19,11 @@
     BLOOM_SOFT_KNEE: 0.7
   };
 
-  const MOTION_MULTIPLIER = 1.25;
-  const MIN_POINTER_DISTANCE = 60;
+  const MOTION_MULTIPLIER = 0.125;
+  const MIN_POINTER_DISTANCE = 250;
   const MIN_POINTER_DISTANCE_SQ = MIN_POINTER_DISTANCE * MIN_POINTER_DISTANCE;
-  const EMITTER_RADIUS_SCALE = 0.2;
+  const EMITTER_RADIUS_SCALE = 0.02;
+  const SPLAT_COOLDOWN_MS = 200;
 
   function register(templateId, factory) {
     if (typeof window === 'undefined') {
@@ -434,7 +435,7 @@
 
     const moveHandler = (event) => {
       const now = performance.now();
-      if (now - lastSplatTime < 80) {
+      if (now - lastSplatTime < SPLAT_COOLDOWN_MS) {
         return;
       }
 
@@ -557,9 +558,9 @@
     }
 
     return {
-      r: r * 0.15,
-      g: g * 0.15,
-      b: b * 0.15
+      r: r * 0.015,
+      g: g * 0.015,
+      b: b * 0.015
     };
   }
 
