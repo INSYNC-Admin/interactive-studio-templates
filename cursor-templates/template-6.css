@@ -1,0 +1,32 @@
+.creative-script-morph-cursor-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  touch-action: none;
+  z-index: 2147483646;
+}
+
+.creative-script-morph-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 26px;
+  height: 26px;
+  pointer-events: none;
+  filter: url("#creative-morph-goo");
+  transform-origin: center center;
+  mix-blend-mode: difference;
+}
+
+.creative-script-morph-cursor span {
+  position: absolute;
+  display: block;
+  width: 26px;
+  height: 26px;
+  border-radius: 20px;
+  background-color: white;
+  transform: translate(-50%, -50%);
+}
