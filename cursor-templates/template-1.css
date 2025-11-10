@@ -1,0 +1,23 @@
+.creative-script-cursor.circle,
+.creative-script-cursor-circle {
+  --creative-script-cursor-size: 40px;
+  position: fixed;
+  width: var(--creative-script-cursor-size);
+  height: var(--creative-script-cursor-size);
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  mix-blend-mode: difference;
+  pointer-events: none;
+  z-index: 9998;
+  top: calc(var(--creative-script-cursor-size) / -2);
+  left: calc(var(--creative-script-cursor-size) / -2);
+  transition: transform 0.12s ease-out;
+}
+
+@media (max-width: 768px) {
+  .creative-script-cursor.circle,
+  .creative-script-cursor-circle {
+    display: none;
+  }
+}
+
