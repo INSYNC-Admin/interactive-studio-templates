@@ -13,17 +13,17 @@
     SHADING: true,
     COLORFUL: true,
     TRANSPARENT: true,
-    BLOOM: false,
+    BLOOM: true,
     BLOOM_INTENSITY: 0.8,
     BLOOM_THRESHOLD: 0.6,
     BLOOM_SOFT_KNEE: 0.7
   };
 
-  const MOTION_MULTIPLIER = 1.75;
-  const MIN_POINTER_DISTANCE = 30;
+  const MOTION_MULTIPLIER = 2.5;
+  const MIN_POINTER_DISTANCE = 15;
   const MIN_POINTER_DISTANCE_SQ = MIN_POINTER_DISTANCE * MIN_POINTER_DISTANCE;
-  const EMITTER_RADIUS_SCALE = 1;
-  const SPLAT_COOLDOWN_MS = 80;
+  const EMITTER_RADIUS_SCALE = 1.25;
+  const SPLAT_COOLDOWN_MS = 40;
 
   function register(templateId, factory) {
     if (typeof window === 'undefined') {
@@ -558,9 +558,9 @@
     }
 
     return {
-      r: r * 0.15,
-      g: g * 0.15,
-      b: b * 0.15
+      r: r * 0.25,
+      g: g * 0.25,
+      b: b * 0.25
     };
   }
 
