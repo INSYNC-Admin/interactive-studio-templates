@@ -42,23 +42,31 @@
       return () => {};
     }
 
+    let layer = null;
     let canvas = null;
     let gl = null;
     let animationId = null;
-    let resizeObserver = null;
+    let removeResize = null;
     const cleanupFns = [];
 
     try {
+      layer = doc.createElement('div');
+      layer.className = 'creative-script-fluid-cursor-layer';
+
       canvas = doc.createElement('canvas');
-      canvas.className = 'creative-script-cursor-fluid-canvas';
-      doc.body.appendChild(canvas);
-      doc.body.classList.add('creative-script-fluid-cursor-active');
+      layer.appendChild(canvas);
+
+      if (doc.body.firstChild) {
+        doc.body.insertBefore(layer, doc.body.firstChild);
+      } else {
+        doc.body.appendChild(layer);
+      }
 
       const { glContext, ext } = initWebGL(win, canvas);
       gl = glContext;
 
       const simulation = createSimulation(win, gl, canvas, ext, CONFIG);
-      const pointerController = createPointerController(win, canvas, simulation.splat);
+      const pointerController = createPointerController(win, simulation.splat);
 
       cleanupFns.push(pointerController.cleanup);
       cleanupFns.push(simulation.cleanup);
@@ -70,8 +78,10 @@
       };
       render();
 
-      resizeObserver = createResizeHandler(win, canvas, simulation.resize);
-      cleanupFns.push(() => resizeObserver && resizeObserver.disconnect());
+      removeResize = createResizeHandler(win, simulation.resize);
+      if (typeof removeResize === 'function') {
+        cleanupFns.push(removeResize);
+      }
     } catch (error) {
       console.error('[Creative Script Cursor] template-3 initialisation failed:', error);
       cleanupInternal();
@@ -90,11 +100,11 @@
           console.warn('[Creative Script Cursor] cleanup error', err);
         }
       });
-      if (canvas && canvas.parentNode) {
-        canvas.parentNode.removeChild(canvas);
+      if (layer && layer.parentNode) {
+        layer.parentNode.removeChild(layer);
       }
+      layer = null;
       canvas = null;
-      doc.body.classList.remove('creative-script-fluid-cursor-active');
     }
 
     return cleanupInternal;
@@ -183,7 +193,6 @@
   }
 
   function createSimulation(win, gl, canvas, ext, config) {
-    const pointers = [createPointer()];
     const splatStack = [];
 
     const programs = compilePrograms(gl, ext);
@@ -200,16 +209,19 @@
       dyeHeight: 0
     };
 
-    initFramebuffers();
+    resize();
     randomSplats(6);
 
     function resize() {
-      const { width, height } = canvas.getBoundingClientRect();
+      const width = win.innerWidth;
+      const height = win.innerHeight;
+
       if (canvas.width !== width || canvas.height !== height) {
         canvas.width = width;
         canvas.height = height;
-        initFramebuffers();
       }
+
+      initFramebuffers();
     }
 
     function initFramebuffers() {
@@ -409,18 +421,28 @@
     };
   }
 
-  function createPointerController(win, canvas, splat) {
+  function createPointerController(win, splat) {
     const pointer = createPointer();
     let isPointerInside = false;
+    const passiveOptions = { passive: true };
 
     const moveHandler = (event) => {
       const x = event.clientX;
       const y = event.clientY;
+      const insideViewport = x >= 0 && y >= 0 && x <= win.innerWidth && y <= win.innerHeight;
+
+      if (!insideViewport) {
+        isPointerInside = false;
+        return;
+      }
 
       if (!isPointerInside) {
         pointer.x = x;
         pointer.y = y;
+        pointer.dx = 0;
+        pointer.dy = 0;
         isPointerInside = true;
+        return;
       }
 
       pointer.dx = (x - pointer.x) * 5;
@@ -428,39 +450,38 @@
       pointer.x = x;
       pointer.y = y;
 
-      if (Math.abs(pointer.dx) < 1 && Math.abs(pointer.dy) < 1) {
+      if (Math.abs(pointer.dx) < 0.5 && Math.abs(pointer.dy) < 0.5) {
         return;
       }
 
       splat(pointer.x, pointer.y, pointer.dx, pointer.dy);
     };
 
-    const enterHandler = () => {
-      isPointerInside = true;
-    };
-
     const leaveHandler = () => {
       isPointerInside = false;
     };
 
-    win.addEventListener('pointermove', moveHandler, { passive: true });
-    canvas.addEventListener('pointerenter', enterHandler, { passive: true });
-    canvas.addEventListener('pointerleave', leaveHandler, { passive: true });
+    win.addEventListener('pointermove', moveHandler, passiveOptions);
+    win.addEventListener('pointerleave', leaveHandler, passiveOptions);
 
     return {
       cleanup() {
-        win.removeEventListener('pointermove', moveHandler, { passive: true });
-        canvas.removeEventListener('pointerenter', enterHandler, { passive: true });
-        canvas.removeEventListener('pointerleave', leaveHandler, { passive: true });
+        win.removeEventListener('pointermove', moveHandler, passiveOptions);
+        win.removeEventListener('pointerleave', leaveHandler, passiveOptions);
       }
     };
   }
 
-  function createResizeHandler(win, canvas, onResize) {
-    const resizeObserver = new ResizeObserver(() => onResize());
-    resizeObserver.observe(canvas);
-    onResize();
-    return resizeObserver;
+  function createResizeHandler(win, onResize) {
+    const resize = () => {
+      onResize();
+    };
+
+    win.addEventListener('resize', resize);
+
+    return () => {
+      win.removeEventListener('resize', resize);
+    };
   }
 
   function getResolution(gl, canvas, resolution) {
