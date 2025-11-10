@@ -5,7 +5,8 @@
   left: 0;
   width: 8px;
   height: 8px;
-  background-color: #333;
+  background-color: #fff;
+  mix-blend-mode: difference;
   border-radius: 50%;
   pointer-events: none;
   transform: translate(-50%, -50%);
