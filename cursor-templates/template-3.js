@@ -19,9 +19,10 @@
     BLOOM_SOFT_KNEE: 0.7
   };
 
-  const MOTION_MULTIPLIER = 1.75;
-  const MIN_POINTER_DISTANCE = 30;
+  const MOTION_MULTIPLIER = 1.25;
+  const MIN_POINTER_DISTANCE = 60;
   const MIN_POINTER_DISTANCE_SQ = MIN_POINTER_DISTANCE * MIN_POINTER_DISTANCE;
+  const EMITTER_RADIUS_SCALE = 0.2;
 
   function register(templateId, factory) {
     if (typeof window === 'undefined') {
@@ -356,7 +357,7 @@
       gl.uniform1f(programs.splat.uniforms.aspectRatio, canvas.width / canvas.height);
       gl.uniform2f(programs.splat.uniforms.point, x / canvas.width, 1 - y / canvas.height);
       gl.uniform3f(programs.splat.uniforms.color, dx, -dy, 1);
-      gl.uniform1f(programs.splat.uniforms.radius, config.SPLAT_RADIUS / 100);
+      gl.uniform1f(programs.splat.uniforms.radius, (config.SPLAT_RADIUS * EMITTER_RADIUS_SCALE) / 100);
       blit(gl, programs.triangleBuffer, state.velocity.write.fbo);
       state.velocity.swap();
 
@@ -429,8 +430,14 @@
     const pointer = createPointer();
     let isPointerInside = false;
     const passiveOptions = { passive: true };
+    let lastSplatTime = 0;
 
     const moveHandler = (event) => {
+      const now = performance.now();
+      if (now - lastSplatTime < 80) {
+        return;
+      }
+
       const x = event.clientX;
       const y = event.clientY;
       const insideViewport = x >= 0 && y >= 0 && x <= win.innerWidth && y <= win.innerHeight;
@@ -462,6 +469,7 @@
       pointer.x = x;
       pointer.y = y;
 
+      lastSplatTime = now;
       splat(pointer.x, pointer.y, pointer.dx, pointer.dy);
     };
 
