@@ -1,4 +1,14 @@
+.creative-script-entrance-blur-word {
+  display: inline-flex;
+  flex-wrap: nowrap;
+}
+
 .creative-script-entrance-blur-char {
   will-change: transform, opacity, filter;
+  display: inline-block;
+}
+
+.creative-script-entrance-blur-char--whitespace {
+  display: inline;
 }
 
