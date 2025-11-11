@@ -132,18 +132,17 @@
 
         timeline.eventCallback('onComplete', () => {
           try {
+            revertSplit();
+          } catch (revertError) {
+            console.warn('[Creative Script][Entrance Template] revertSplit fehlgeschlagen:', revertError);
+          }
+          element.style.visibility = originalVisibility;
+          try {
             timeline.scrollTrigger?.kill();
             timeline.kill();
           } catch (killError) {
             console.warn('[Creative Script][Entrance Template] Timeline kill fehlgeschlagen:', killError);
           }
-          try {
-            gsap.set(chars, { clearProps: 'all' });
-          } catch (clearError) {
-            console.warn('[Creative Script][Entrance Template] clearProps fehlgeschlagen:', clearError);
-          }
-          revertSplit();
-          element.style.visibility = originalVisibility;
         });
 
         instances.push({
@@ -179,13 +178,6 @@
     return () => {
       instances.forEach((instance) => {
         try {
-          instance.timeline?.scrollTrigger?.kill();
-          instance.timeline?.kill();
-        } catch (timelineError) {
-          console.warn('[Creative Script][Entrance Template] ScrollTrigger kill fehlgeschlagen:', timelineError);
-        }
-
-        try {
           instance.revert?.();
           instance.split?.revert();
         } catch (revertError) {
@@ -193,9 +185,10 @@
         }
 
         try {
-          gsap.set(instance.split?.chars || [], { clearProps: 'all' });
-        } catch (clearError) {
-          console.warn('[Creative Script][Entrance Template] clearProps im Cleanup fehlgeschlagen:', clearError);
+          instance.timeline?.scrollTrigger?.kill();
+          instance.timeline?.kill();
+        } catch (timelineError) {
+          console.warn('[Creative Script][Entrance Template] ScrollTrigger kill fehlgeschlagen:', timelineError);
         }
 
         instance.resetVisibility?.();
