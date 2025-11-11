@@ -44,8 +44,6 @@
       let splitInstance = null;
       let timeline = null;
 
-      const originalVisibility = element.style.visibility;
-
       try {
         element.style.visibility = 'hidden';
         if (!window.SplitType) {
@@ -96,20 +94,6 @@
             console.warn('[Creative Script][Entrance Template] Fehler beim Auffinden des Trigger-Elements:', error);
           }
         }
-
-        let hasReverted = false;
-        const revertSplit = () => {
-          if (hasReverted) {
-            return;
-          }
-          try {
-            splitInstance.revert();
-            hasReverted = true;
-          } catch (revertError) {
-            console.warn('[Creative Script][Entrance Template] SplitType revert fehlgeschlagen:', revertError);
-          }
-        };
-
         timeline = gsap.from(chars, {
           opacity: 0,
           filter: `blur(${blurAmount}px)`,
@@ -131,12 +115,7 @@
         });
 
         timeline.eventCallback('onComplete', () => {
-          try {
-            revertSplit();
-          } catch (revertError) {
-            console.warn('[Creative Script][Entrance Template] revertSplit fehlgeschlagen:', revertError);
-          }
-          element.style.visibility = originalVisibility;
+          element.style.removeProperty('visibility');
           try {
             timeline.scrollTrigger?.kill();
             timeline.kill();
@@ -148,10 +127,7 @@
         instances.push({
           split: splitInstance,
           timeline,
-          revert: revertSplit,
-          resetVisibility: () => {
-            element.style.visibility = originalVisibility;
-          },
+          element,
         });
       } catch (error) {
         console.error('[Creative Script][Entrance Template] Fehler beim Initialisieren der Animation:', error);
@@ -163,7 +139,7 @@
             console.warn('[Creative Script][Entrance Template] SplitType revert fehlgeschlagen:', revertError);
           }
         }
-        element.style.visibility = originalVisibility;
+        element.style.removeProperty('visibility');
         if (timeline) {
           try {
             timeline.scrollTrigger?.kill();
@@ -178,20 +154,21 @@
     return () => {
       instances.forEach((instance) => {
         try {
-          instance.revert?.();
-          instance.split?.revert();
-        } catch (revertError) {
-          console.warn('[Creative Script][Entrance Template] SplitType revert fehlgeschlagen:', revertError);
-        }
-
-        try {
           instance.timeline?.scrollTrigger?.kill();
           instance.timeline?.kill();
         } catch (timelineError) {
           console.warn('[Creative Script][Entrance Template] ScrollTrigger kill fehlgeschlagen:', timelineError);
         }
 
-        instance.resetVisibility?.();
+        try {
+          instance.split?.revert();
+        } catch (revertError) {
+          console.warn('[Creative Script][Entrance Template] SplitType revert fehlgeschlagen:', revertError);
+        }
+
+        if (instance.element?.style) {
+          instance.element.style.removeProperty('visibility');
+        }
       });
     };
   });
