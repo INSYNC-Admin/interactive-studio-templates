@@ -93,37 +93,11 @@
           delay: extraDelay,
           scrollTrigger: {
             trigger: triggerElement,
-            start: typeof start === 'string' && start.trim().length > 0 ? start : 'top 95%',
+            start: typeof start === 'string' && start.trim().length > 0 ? start : 'top bottom',
             once: true,
             toggleActions: 'play none none none',
           },
         });
-
-        const attemptImmediatePlay = () => {
-          if (!timeline) {
-            return;
-          }
-          const target = triggerElement || element;
-          if (!target) {
-            return;
-          }
-          if (timeline.scrollTrigger && timeline.progress() === 0 && isElementInViewport(target, 0)) {
-            timeline.play(0);
-            timeline.scrollTrigger.kill(false);
-          }
-        };
-
-        if (typeof window !== 'undefined') {
-          if (document.readyState === 'complete') {
-            window.requestAnimationFrame(attemptImmediatePlay);
-          } else {
-            const onLoad = () => {
-              window.removeEventListener('load', onLoad);
-              window.requestAnimationFrame(attemptImmediatePlay);
-            };
-            window.addEventListener('load', onLoad);
-          }
-        }
 
         instances.push({
           split: splitInstance,
@@ -168,21 +142,5 @@
     };
   });
 
-  function isElementInViewport(element, threshold) {
-    if (!element || typeof element.getBoundingClientRect !== 'function') {
-      return false;
-    }
-    const rect = element.getBoundingClientRect();
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-    const offset = typeof threshold === 'number' ? threshold : 0;
-
-    return (
-      rect.bottom >= -offset &&
-      rect.top <= viewportHeight + offset &&
-      rect.right >= -offset &&
-      rect.left <= viewportWidth + offset
-    );
-  }
 })();
 
