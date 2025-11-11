@@ -32,6 +32,7 @@
     const duration = typeof params.duration === 'number' ? params.duration : 0.6;
     const ease = typeof params.ease === 'string' && params.ease.trim().length > 0 ? params.ease.trim() : 'power2.out';
     const extraDelay = typeof params.delay === 'number' ? params.delay : 0;
+    const charClassName = 'creative-script-entrance-blur-char';
 
     const instances = [];
 
@@ -50,7 +51,7 @@
         }
 
         splitInstance = new window.SplitType(element, {
-          types: 'chars',
+          types: 'lines,words,chars',
           preserveWhitespace: true,
         });
 
@@ -62,9 +63,19 @@
         }
 
         try {
+          splitInstance.words?.forEach((word) => {
+            if (word && word.classList) {
+              word.classList.add('creative-script-entrance-blur-word');
+            }
+          });
+
           chars.forEach((char) => {
-            if (char && char.classList) {
-              char.classList.add('creative-script-entrance-blur-char');
+            if (!char || !char.classList) {
+              return;
+            }
+            char.classList.add(charClassName);
+            if (char.dataset && char.dataset.isWhitespace === 'true') {
+              char.classList.add(`${charClassName}--whitespace`);
             }
           });
         } catch (classError) {
@@ -83,6 +94,19 @@
           }
         }
 
+        let hasReverted = false;
+        const revertSplit = () => {
+          if (hasReverted) {
+            return;
+          }
+          try {
+            splitInstance.revert();
+            hasReverted = true;
+          } catch (revertError) {
+            console.warn('[Creative Script][Entrance Template] SplitType revert fehlgeschlagen:', revertError);
+          }
+        };
+
         timeline = gsap.from(chars, {
           opacity: 0,
           filter: `blur(${blurAmount}px)`,
@@ -99,9 +123,20 @@
           },
         });
 
+        timeline.eventCallback('onComplete', () => {
+          try {
+            timeline.scrollTrigger?.kill();
+            timeline.kill();
+          } catch (killError) {
+            console.warn('[Creative Script][Entrance Template] Timeline kill fehlgeschlagen:', killError);
+          }
+          revertSplit();
+        });
+
         instances.push({
           split: splitInstance,
           timeline,
+          revert: revertSplit,
         });
       } catch (error) {
         console.error('[Creative Script][Entrance Template] Fehler beim Initialisieren der Animation:', error);
@@ -134,6 +169,7 @@
         }
 
         try {
+          instance.revert?.();
           instance.split?.revert();
         } catch (revertError) {
           console.warn('[Creative Script][Entrance Template] SplitType revert fehlgeschlagen:', revertError);
