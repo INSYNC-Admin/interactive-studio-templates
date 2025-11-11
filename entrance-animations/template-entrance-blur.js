@@ -44,7 +44,10 @@
       let splitInstance = null;
       let timeline = null;
 
+      const originalVisibility = element.style.visibility;
+
       try {
+        element.style.visibility = 'hidden';
         if (!window.SplitType) {
           console.warn('[Creative Script][Entrance Template] SplitType ist nicht geladen.');
           return;
@@ -74,7 +77,7 @@
               return;
             }
             char.classList.add(charClassName);
-            if (char.dataset && char.dataset.isWhitespace === 'true') {
+            if (char.textContent && /\s/.test(char.textContent)) {
               char.classList.add(`${charClassName}--whitespace`);
             }
           });
@@ -123,6 +126,10 @@
           },
         });
 
+        timeline.eventCallback('onStart', () => {
+          element.style.visibility = 'visible';
+        });
+
         timeline.eventCallback('onComplete', () => {
           try {
             timeline.scrollTrigger?.kill();
@@ -130,13 +137,22 @@
           } catch (killError) {
             console.warn('[Creative Script][Entrance Template] Timeline kill fehlgeschlagen:', killError);
           }
+          try {
+            gsap.set(chars, { clearProps: 'all' });
+          } catch (clearError) {
+            console.warn('[Creative Script][Entrance Template] clearProps fehlgeschlagen:', clearError);
+          }
           revertSplit();
+          element.style.visibility = originalVisibility;
         });
 
         instances.push({
           split: splitInstance,
           timeline,
           revert: revertSplit,
+          resetVisibility: () => {
+            element.style.visibility = originalVisibility;
+          },
         });
       } catch (error) {
         console.error('[Creative Script][Entrance Template] Fehler beim Initialisieren der Animation:', error);
@@ -148,6 +164,7 @@
             console.warn('[Creative Script][Entrance Template] SplitType revert fehlgeschlagen:', revertError);
           }
         }
+        element.style.visibility = originalVisibility;
         if (timeline) {
           try {
             timeline.scrollTrigger?.kill();
@@ -174,6 +191,14 @@
         } catch (revertError) {
           console.warn('[Creative Script][Entrance Template] SplitType revert fehlgeschlagen:', revertError);
         }
+
+        try {
+          gsap.set(instance.split?.chars || [], { clearProps: 'all' });
+        } catch (clearError) {
+          console.warn('[Creative Script][Entrance Template] clearProps im Cleanup fehlgeschlagen:', clearError);
+        }
+
+        instance.resetVisibility?.();
       });
     };
   });
