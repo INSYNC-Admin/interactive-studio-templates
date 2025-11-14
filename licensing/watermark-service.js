@@ -1,361 +1,309 @@
 /**
  * Shared Watermark Service für Interactive Studio Apps
  * Singleton Pattern - verhindert mehrfache Initialisierung
+ * Batch API für mehrere Apps
  */
 (function() {
   'use strict';
 
   const WATERMARK_NAMESPACE = '__interactiveStudioWatermark';
   const WATERMARK_ID = 'interactive-studio-watermark';
-  const WATERMARK_API_URL = 'https://plan-status-service.onrender.com/api/plan-status';
-  
-  // Singleton: Nur einmal initialisieren
+  const API_URL = 'https://plan-status-service.onrender.com/api/plan-status';
+
+  // Singleton Pattern
   if (window[WATERMARK_NAMESPACE]) {
-    console.log('[Watermark Service] Already initialized by another app');
+    console.log('[Watermark] Service already initialized by another app');
     return window[WATERMARK_NAMESPACE];
   }
 
-  /**
-   * Watermark Service Class
-   */
   class WatermarkService {
     constructor() {
       this.isInitialized = false;
       this.watermarkElement = null;
-      this.currentPlanStatus = null;
-      this.checkInterval = null;
-      this.apiCache = new Map();
-      this.apiCacheTTL = 5 * 60 * 1000; // 5 Minuten
-      this.registeredApps = new Set();
+      this.registeredApps = new Map(); // appId → { instanceId, appName }
+      this.appStatuses = new Map(); // appId → { isFree, planName, timestamp }
       
-      // Callbacks für Plan-Status-Änderungen
-      this.statusChangeCallbacks = [];
-      
-      // Initialisiere Service
-      this.init();
+      console.log('[Watermark] Service constructor initialized');
     }
 
-    /**
-     * App registrieren (z.B. 'spline', 'scroll-sequence', 'creative-script')
-     */
-    registerApp(appId) {
-      if (typeof appId !== 'string' || !appId.trim()) {
-        console.warn('[Watermark Service] Invalid appId:', appId);
-        return;
-      }
-      
-      this.registeredApps.add(appId.trim());
-      
-      console.log('[Watermark Service] App registered:', appId, 'Total apps:', this.registeredApps.size);
-    }
-
-    /**
-     * Initialisiere Service
-     */
-    init() {
-      if (this.isInitialized) {
+    registerApp(appId, instanceId, appName) {
+      if (!appId || !instanceId || !appName) {
+        console.error('[Watermark] Invalid app registration:', { appId, instanceId, appName });
         return;
       }
 
-      console.log('[Watermark Service] Initializing...');
-      
-      // Warte auf DOM
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => this.start());
-      } else {
-        this.start();
-      }
+      this.registeredApps.set(appId, { instanceId, appName });
+      console.log(`[Watermark] App registered: ${appName} (${appId}) - Instance: ${instanceId}`);
+      console.log(`[Watermark] Total registered apps: ${this.registeredApps.size}`);
     }
 
-    /**
-     * Starte Wasserzeichen-Logik
-     */
     async start() {
       if (this.isInitialized) {
+        console.log('[Watermark] Service already started, skipping');
+        return;
+      }
+      
+      this.isInitialized = true;
+      console.log('[Watermark] Starting service...');
+      console.log(`[Watermark] Registered apps: ${this.registeredApps.size}`);
+
+      // Initial Check (nur einmal beim Laden, kein Polling)
+      await this.checkPlanStatusForAllApps();
+      
+      console.log('[Watermark] Initial check completed');
+    }
+
+    async checkPlanStatusForAllApps() {
+      if (this.registeredApps.size === 0) {
+        console.warn('[Watermark] No apps registered, skipping plan check');
         return;
       }
 
-      this.isInitialized = true;
-      
-      // Prüfe Plan-Status
-      await this.checkPlanStatus();
-      
-      // Periodische Updates (alle 5 Minuten)
-      this.checkInterval = setInterval(() => {
-        this.checkPlanStatus().catch(err => {
-          console.error('[Watermark Service] Error during periodic check:', err);
-        });
-      }, 5 * 60 * 1000);
-    }
-
-    /**
-     * Parse instance parameter (schnell, für UI)
-     */
-    parseInstanceParameter() {
-      try {
-        const urlParams = new URLSearchParams(window.location.search);
-        const instanceParam = urlParams.get('instance');
-        
-        if (!instanceParam) {
-          return { isFree: true, vendorProductId: null, source: 'fallback' };
-        }
-        
-        const parts = instanceParam.split('.');
-        if (parts.length !== 2) {
-          return { isFree: true, vendorProductId: null, source: 'fallback' };
-        }
-        
-        const dataPart = parts[1];
-        const decoded = atob(dataPart.replace(/-/g, '+').replace(/_/g, '/'));
-        const instanceData = JSON.parse(decoded);
-        
-        const vendorProductId = instanceData.vendorProductId;
-        const isFree = !vendorProductId || vendorProductId === null || vendorProductId === '';
-        
+      // Build batch request
+      const checks = Array.from(this.registeredApps.entries()).map(([appId, appData]) => {
+        console.log(`[Watermark] Preparing check for app: ${appData.appName} (${appId}) - Instance: ${appData.instanceId}`);
         return {
-          isFree: isFree,
-          vendorProductId: vendorProductId,
-          instanceId: instanceData.instanceId,
-          source: 'instance-param'
+          instanceId: appData.instanceId,
+          appId: appId
         };
-      } catch (error) {
-        console.error('[Watermark Service] Failed to parse instance parameter:', error);
-        return { isFree: true, vendorProductId: null, source: 'fallback' };
-      }
-    }
+      });
 
-    /**
-     * Prüfe Plan-Status via Backend API (sicher, für Validierung)
-     */
-    async checkPlanStatusViaAPI(instanceId) {
+      console.log('[Watermark] Batch request payload:', JSON.stringify(checks, null, 2));
+      console.log(`[Watermark] Calling API: ${API_URL}/batch`);
+
       try {
-        // Check cache first
-        const cacheKey = instanceId;
-        const cached = this.apiCache.get(cacheKey);
-        if (cached && Date.now() - cached.timestamp < this.apiCacheTTL) {
-          return { ...cached.data, source: 'api-cache' };
-        }
-        
-        // Get instance token
-        const instanceToken = new URLSearchParams(window.location.search).get('instance');
-        if (!instanceToken) {
-          return { isFree: true, vendorProductId: null, source: 'fallback' };
-        }
-        
-        // Call backend API
-        const response = await fetch(WATERMARK_API_URL, {
+        const response = await fetch(`${API_URL}/batch`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${instanceToken}`
           },
-          body: JSON.stringify({ instanceId: instanceId })
+          body: JSON.stringify({ checks })
         });
+
+        console.log('[Watermark] API Response status:', response.status, response.statusText);
         
         if (!response.ok) {
-          throw new Error(`API responded with ${response.status}`);
+          const errorText = await response.text();
+          console.error(`[Watermark] API Error: HTTP ${response.status} - ${errorText}`);
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-        
-        const data = await response.json();
-        
-        // Cache result
-        this.apiCache.set(cacheKey, {
-          data: data,
-          timestamp: Date.now()
+
+        const responseData = await response.json();
+        console.log('[Watermark] API Response data:', JSON.stringify(responseData, null, 2));
+
+        const { results } = responseData;
+        console.log(`[Watermark] Received ${results.length} results from API`);
+
+        // Update App-Statuses
+        results.forEach((result, index) => {
+          console.log(`[Watermark] Processing result ${index + 1}/${results.length}:`, JSON.stringify(result, null, 2));
+          
+          this.appStatuses.set(result.appId, {
+            isFree: result.isFree,
+            planName: result.planName || 'Unknown',
+            appName: result.appName || this.registeredApps.get(result.appId)?.appName || result.appId,
+            timestamp: Date.now(),
+            vendorProductId: result.vendorProductId || null,
+            packageName: result.packageName || null,
+            source: result.source || 'api'
+          });
+
+          const status = this.appStatuses.get(result.appId);
+          console.log(`[Watermark] Updated status for ${result.appId}:`, {
+            isFree: status.isFree,
+            planName: status.planName,
+            appName: status.appName,
+            vendorProductId: status.vendorProductId,
+            packageName: status.packageName
+          });
+        });
+
+        // Update Wasserzeichen
+        this.updateWatermark();
+      } catch (error) {
+        console.error('[Watermark] Failed to check plan status:', error);
+        console.error('[Watermark] Error details:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
         });
         
-        return { ...data, source: 'api' };
-      } catch (error) {
-        console.error('[Watermark Service] Failed to check plan via API:', error);
-        return { isFree: true, vendorProductId: null, source: 'fallback', error: error.message };
-      }
-    }
-
-    /**
-     * Hauptfunktion: Prüfe Plan-Status
-     */
-    async checkPlanStatus() {
-      // Layer 1: Schnelle UI-Antwort via Instance Parameter
-      const quickStatus = this.parseInstanceParameter();
-      
-      // Layer 2: Backend-Validierung (async, non-blocking)
-      let validatedStatus = quickStatus;
-      if (quickStatus.instanceId) {
-        // Validiere im Hintergrund, aber nutze erstmal Quick-Status für UI
-        this.checkPlanStatusViaAPI(quickStatus.instanceId)
-          .then(apiStatus => {
-            // Update falls sich Status geändert hat
-            if (this.hasStatusChanged(validatedStatus, apiStatus)) {
-              validatedStatus = apiStatus;
-              this.updateWatermark(validatedStatus);
-            }
-          })
-          .catch(err => {
-            console.error('[Watermark Service] Background validation failed:', err);
+        // Fail-safe: Bei Fehler alle Apps als Free markieren
+        console.warn('[Watermark] Fail-safe: Marking all apps as free due to error');
+        this.registeredApps.forEach((appData, appId) => {
+          this.appStatuses.set(appId, { 
+            isFree: true, 
+            planName: 'Error',
+            appName: appData.appName,
+            timestamp: Date.now(),
+            error: error.message,
+            source: 'error-fallback'
           });
-      }
-      
-      // Update Wasserzeichen mit Quick-Status (sofort)
-      this.updateWatermark(quickStatus);
-    }
-
-    /**
-     * Prüfe ob Status sich geändert hat
-     */
-    hasStatusChanged(oldStatus, newStatus) {
-      return oldStatus.isFree !== newStatus.isFree || 
-             oldStatus.vendorProductId !== newStatus.vendorProductId;
-    }
-
-    /**
-     * Update Wasserzeichen basierend auf Plan-Status
-     */
-    updateWatermark(planStatus) {
-      const previousStatus = this.currentPlanStatus;
-      this.currentPlanStatus = planStatus;
-      
-      if (planStatus.isFree) {
-        this.showWatermark();
-      } else {
-        this.hideWatermark();
-      }
-      
-      // Trigger callbacks wenn Status sich geändert hat
-      if (previousStatus && this.hasStatusChanged(previousStatus, planStatus)) {
-        this.notifyStatusChange(planStatus);
-      }
-    }
-
-    /**
-     * Zeige Wasserzeichen (nur einmal)
-     */
-    showWatermark() {
-      // Prüfe ob bereits existiert
-      if (this.watermarkElement && document.body.contains(this.watermarkElement)) {
-        this.watermarkElement.style.display = 'block';
-        return;
-      }
-      
-      // Erstelle Element
-      this.watermarkElement = document.getElementById(WATERMARK_ID);
-      
-      if (!this.watermarkElement) {
-        this.watermarkElement = document.createElement('div');
-        this.watermarkElement.id = WATERMARK_ID;
-        this.watermarkElement.style.cssText = `
-          position: fixed;
-          bottom: 20px;
-          right: 20px;
-          z-index: 999999;
-          background: rgba(0, 0, 0, 0.85);
-          color: white;
-          padding: 10px 16px;
-          border-radius: 6px;
-          font-size: 12px;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-          pointer-events: none;
-          user-select: none;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-          backdrop-filter: blur(8px);
-          transition: opacity 0.3s ease;
-        `;
-        this.watermarkElement.textContent = 'Interactive Studio Free Plan';
+        });
         
-        // Append to body
-        if (document.body) {
-          document.body.appendChild(this.watermarkElement);
-        } else {
-          // Wait for body
-          const observer = new MutationObserver(() => {
-            if (document.body) {
-              document.body.appendChild(this.watermarkElement);
-              observer.disconnect();
-            }
+        this.updateWatermark();
+      }
+    }
+
+    getFreeAppsList() {
+      const freeApps = [];
+      this.appStatuses.forEach((status, appId) => {
+        if (status.isFree) {
+          console.log(`[Watermark] Found free app: ${status.appName} (${appId})`);
+          freeApps.push({
+            appId: appId,
+            appName: status.appName,
+            planName: status.planName
           });
-          observer.observe(document.documentElement, { childList: true });
-        }
-      }
-      
-      this.watermarkElement.style.display = 'block';
-      console.log('[Watermark Service] Watermark shown');
-    }
-
-    /**
-     * Verstecke Wasserzeichen
-     */
-    hideWatermark() {
-      if (this.watermarkElement) {
-        this.watermarkElement.style.display = 'none';
-        console.log('[Watermark Service] Watermark hidden');
-      }
-    }
-
-    /**
-     * Registriere Callback für Status-Änderungen
-     */
-    onStatusChange(callback) {
-      if (typeof callback === 'function') {
-        this.statusChangeCallbacks.push(callback);
-      }
-    }
-
-    /**
-     * Benachrichtige alle Callbacks
-     */
-    notifyStatusChange(newStatus) {
-      this.statusChangeCallbacks.forEach(callback => {
-        try {
-          callback(newStatus);
-        } catch (error) {
-          console.error('[Watermark Service] Error in status change callback:', error);
+        } else {
+          console.log(`[Watermark] Found paid app: ${status.appName} (${appId}) - Plan: ${status.planName}`);
         }
       });
-    }
-
-    /**
-     * Get current plan status
-     */
-    getCurrentPlanStatus() {
-      return this.currentPlanStatus;
-    }
-
-    /**
-     * Cleanup
-     */
-    destroy() {
-      if (this.checkInterval) {
-        clearInterval(this.checkInterval);
-        this.checkInterval = null;
-      }
       
+      console.log(`[Watermark] Free apps list: ${freeApps.length} app(s)`, freeApps);
+      return freeApps;
+    }
+
+    updateWatermark() {
+      const freeApps = this.getFreeAppsList();
+      
+      console.log(`[Watermark] Updating watermark - Free apps: ${freeApps.length}`);
+      console.log('[Watermark] Current app statuses:', Array.from(this.appStatuses.entries()).map(([appId, status]) => ({
+        appId,
+        appName: status.appName,
+        isFree: status.isFree,
+        planName: status.planName
+      })));
+
+      if (freeApps.length > 0) {
+        console.log('[Watermark] Showing watermark - Free apps detected:', freeApps.map(a => a.appName));
+        this.showWatermark(freeApps);
+      } else {
+        console.log('[Watermark] Hiding watermark - All apps have paid plans');
+        this.hideWatermark();
+      }
+    }
+
+    showWatermark(freeApps = []) {
+      console.log('[Watermark] showWatermark called with free apps:', freeApps);
+      
+      if (this.watermarkElement) {
+        console.log('[Watermark] Watermark element already exists, updating content');
+        this.updateWatermarkContent(freeApps);
+        this.watermarkElement.style.display = 'block';
+        this.watermarkElement.style.opacity = '1';
+        return;
+      }
+
+      console.log('[Watermark] Creating new watermark element');
+      const watermark = document.createElement('div');
+      watermark.id = WATERMARK_ID;
+      
+      // CSS Styles
+      watermark.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 999999;
+        background: rgba(0, 0, 0, 0.85);
+        color: white;
+        padding: 12px 18px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        pointer-events: none;
+        user-select: none;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        backdrop-filter: blur(8px);
+        transition: opacity 0.3s ease;
+        line-height: 1.5;
+        max-width: 300px;
+      `;
+      
+      this.updateWatermarkContent(freeApps, watermark);
+      
+      if (document.body) {
+        document.body.appendChild(watermark);
+        this.watermarkElement = watermark;
+        console.log('[Watermark] Watermark element appended to body');
+      } else {
+        console.log('[Watermark] Body not ready, waiting...');
+        const observer = new MutationObserver(() => {
+          if (document.body) {
+            document.body.appendChild(watermark);
+            this.watermarkElement = watermark;
+            observer.disconnect();
+            console.log('[Watermark] Watermark element appended to body (after wait)');
+          }
+        });
+        observer.observe(document.documentElement, { childList: true });
+      }
+    }
+
+    updateWatermarkContent(freeApps, element = this.watermarkElement) {
+      if (!element) {
+        console.warn('[Watermark] Cannot update content - element is null');
+        return;
+      }
+
+      console.log('[Watermark] Updating watermark content with free apps:', freeApps);
+      
+      let html = '<div style="font-weight: 600; margin-bottom: 8px;">Made with Interactive Studio</div>';
+
+      if (freeApps.length > 0) {
+        html += '<div style="font-size: 11px; opacity: 0.9; margin-top: 4px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 8px;">';
+        html += '<div style="margin-bottom: 4px;">Free Plan:</div>';
+        freeApps.forEach(app => {
+          const appDisplayName = app.appName || app.appId;
+          html += `<div style="margin-top: 4px;">• ${appDisplayName} by Interactive Studio</div>`;
+        });
+        html += '</div>';
+      }
+
+      element.innerHTML = html;
+      console.log('[Watermark] Watermark content updated:', html);
+    }
+
+    hideWatermark() {
+      if (this.watermarkElement) {
+        console.log('[Watermark] Hiding watermark element');
+        this.watermarkElement.style.opacity = '0';
+        setTimeout(() => {
+          if (this.watermarkElement) {
+            this.watermarkElement.style.display = 'none';
+            console.log('[Watermark] Watermark element hidden');
+          }
+        }, 300);
+      } else {
+        console.log('[Watermark] No watermark element to hide');
+      }
+    }
+
+    destroy() {
+      console.log('[Watermark] Destroying service');
       if (this.watermarkElement) {
         this.watermarkElement.remove();
         this.watermarkElement = null;
       }
-      
       this.isInitialized = false;
-      console.log('[Watermark Service] Destroyed');
+      this.registeredApps.clear();
+      this.appStatuses.clear();
+      console.log('[Watermark] Service destroyed');
     }
   }
 
-  // Singleton erstellen
-  const watermarkService = new WatermarkService();
+  const service = new WatermarkService();
+  window[WATERMARK_NAMESPACE] = service;
   
-  // Global verfügbar machen
-  window[WATERMARK_NAMESPACE] = watermarkService;
-  
-  // Cleanup on unload
   window.addEventListener('beforeunload', () => {
-    watermarkService.destroy();
+    service.destroy();
   });
   
-  console.log('[Watermark Service] Singleton created');
+  console.log('[Watermark] Singleton service created and available at window.__interactiveStudioWatermark');
   
-  // Export für Module Systems (falls vorhanden)
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = watermarkService;
+    module.exports = service;
   }
   
-  return watermarkService;
+  return service;
 })();
-
