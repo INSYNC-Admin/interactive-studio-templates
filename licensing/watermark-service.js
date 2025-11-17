@@ -22,6 +22,7 @@
       this.watermarkElement = null;
       this.registeredApps = new Map(); // appId → { instanceId, appName }
       this.appStatuses = new Map(); // appId → { isFree, planName, timestamp }
+      this.isPlanCheckInProgress = false;
       
       console.log('[Watermark] Service constructor initialized');
     }
@@ -35,6 +36,25 @@
       this.registeredApps.set(appId, { instanceId, appName });
       console.log(`[Watermark] App registered: ${appName} (${appId}) - Instance: ${instanceId}`);
       console.log(`[Watermark] Total registered apps: ${this.registeredApps.size}`);
+
+      if (this.isInitialized) {
+        this.schedulePlanCheck();
+      }
+    }
+
+    schedulePlanCheck(delay = 0) {
+      if (this.isPlanCheckInProgress) {
+        return;
+      }
+
+      this.isPlanCheckInProgress = true;
+      setTimeout(async () => {
+        try {
+          await this.checkPlanStatusForAllApps();
+        } finally {
+          this.isPlanCheckInProgress = false;
+        }
+      }, delay);
     }
 
     async start() {
